@@ -1,0 +1,14 @@
+{
+    "auth": {
+        "INVALID_CREDENTIALS":"Correo o contraseña incorrectos."
+    },
+    "language": {
+        "SPANISH": "Español",
+        "ENGLISH": "Inglés"
+    },
+    "theme": {
+        "LIGHT": "Claro",
+        "DARK": "Oscuro",
+        "SYSTEM": "Sistema"
+    }
+}
