@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/Stiven-21/nestjs-auth-frontend/compare/v1.0.1...v1.0.2) (2026-02-26)
+
+### Bug Fixes
+
+* Se agrega @semantic-release/npm para que package actualice la version automaticamente ([73e8e61](https://github.com/Stiven-21/nestjs-auth-frontend/commit/73e8e6157ec85be4554b6ea1e4592c3f6101fb11))
+* Se configura @semantic-release/npm cons npmpublish: false para que solo actualice el package ([3cd137a](https://github.com/Stiven-21/nestjs-auth-frontend/commit/3cd137ad53ed2a941d9f4e9cc1b5b3f313ffb47b))
+
 ## [1.0.1](https://github.com/Stiven-21/nestjs-auth-frontend/compare/v1.0.0...v1.0.1) (2026-02-26)
 
 ### Bug Fixes
