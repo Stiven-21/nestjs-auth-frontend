@@ -13,6 +13,7 @@ export async function apiRequest<T, D = unknown>(
   data?: D,
   headers?: HeadersInit,
   accessToken?: string,
+  reAuthToken?: string,
 ): Promise<SuccessResponse<T>> {
   const lang = await getLanguage();
 
@@ -21,17 +22,21 @@ export async function apiRequest<T, D = unknown>(
     headers: {
       "Content-Type": "application/json",
       "accept-language": lang,
+      ...(reAuthToken && { "X-Reauth-Token": `${reAuthToken}` }),
       ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
       ...headers,
     },
     ...(data && { body: JSON.stringify(data) }),
   });
 
+  // const parsed = await response.json();
+
   let parsed: unknown;
 
   try {
     parsed = await response.json();
-  } catch {
+  } catch (error) {
+    console.error(error);
     throw new ApiError({
       message: "Respuesta inválida del servidor",
       code: "INVALID_JSON",

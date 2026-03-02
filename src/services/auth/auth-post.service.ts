@@ -3,6 +3,31 @@ import { SignUpForm } from "@/interfaces/forms/signUpForm";
 import { apiRequest } from "@/services/api";
 
 /**
+ * Inicia sesión en la plataforma.
+ * @param {loginForm} data - Los datos del formulario de inicio de sesión.
+ * @returns {Promise<SuccessResponse<ResponseLogin>>} Una promesa que resuelve con la respuesta del servidor.
+ * @throws {ApiError} Si ocurre un error en la solicitud.
+ */
+export interface loginForm {
+  email: string;
+  password: string;
+}
+
+export interface ResponseLogin {
+  refreshToken: string;
+}
+
+export async function login(
+  data: loginForm,
+): Promise<SuccessResponse<ResponseLogin>> {
+  return await apiRequest<ResponseLogin, loginForm>(
+    "/auth/sign-in",
+    "POST",
+    data,
+  );
+}
+
+/**
  * Registra un nuevo usuario en la plataforma.
  * @param {SignUpForm} data - Los datos del formulario de registro.
  * @returns {Promise<SuccessResponse<null>>} Una promesa que resuelve con la respuesta del servidor.
@@ -95,5 +120,82 @@ export async function verifyEmail(
     "POST",
     undefined,
     undefined,
+  );
+}
+
+/**
+ *
+ * @param {string} password - La contraseña del usuario.
+ * @param {string} token - El token de autenticación del usuario actual.
+ * @returns {Promise<SuccessResponse<string>>} Una promesa que resuelve con la respuesta del servidor.
+ * @throws {ApiError} Si ocurre un error en la solicitud.
+ */
+export async function reAuth(
+  data: { password: string },
+  token: string,
+): Promise<SuccessResponse<string>> {
+  return apiRequest<string, { password: string }>(
+    "/auth/re-auth",
+    "POST",
+    data,
+    undefined,
+    token,
+  );
+}
+
+/**
+ *
+ * @param {string} token - El token de autenticación del usuario actual.
+ * @returns {Promise<SuccessResponse<null>>} Una promesa que resuelve con la respuesta del servidor.
+ * @throws {ApiError} Si ocurre un error en la solicitud.
+ */
+export async function enable2FA(
+  data: { twoFactorType: string },
+  token: string,
+  reauth: string,
+): Promise<SuccessResponse<null>> {
+  return await apiRequest<null, { twoFactorType: string }>(
+    "/auth/2fa/enable",
+    "POST",
+    data,
+    undefined,
+    token,
+    reauth,
+  );
+}
+
+export async function confirm2FA(
+  data: { code: string },
+  token: string,
+): Promise<SuccessResponse<null>> {
+  return await apiRequest<null, { code: string }>(
+    "/auth/2fa/confirm",
+    "POST",
+    data,
+    undefined,
+    token,
+  );
+}
+
+export async function disable2FA(
+  token: string,
+): Promise<SuccessResponse<null>> {
+  return await apiRequest<null, undefined>(
+    "/auth/2fa/disable",
+    "POST",
+    undefined,
+    undefined,
+    token,
+  );
+}
+
+export async function verify2FA(data: {
+  code: string;
+  userId: number; // luego se cambia por token temporal
+}): Promise<SuccessResponse<ResponseLogin>> {
+  return await apiRequest<ResponseLogin, { code: string; userId: number }>(
+    "/auth/2fa/verify",
+    "POST",
+    data,
   );
 }

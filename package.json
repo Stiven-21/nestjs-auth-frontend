@@ -23,6 +23,7 @@
     "react-icons": "^5.5.0",
     "react-toastify": "^11.0.5",
     "react-world-flags": "^1.6.0",
+    "tailwind-merge": "^3.5.0",
     "tailwind-scrollbar": "^4.0.2"
   },
   "devDependencies": {

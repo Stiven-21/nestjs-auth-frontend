@@ -17,6 +17,11 @@ export interface Oauth {
   avatar: string;
 }
 
+export interface UserSecurity {
+  twoFactorEnabled: boolean;
+  twoFactorType: string;
+}
+
 /**
  * @interface UserMe
  * @description Representa la estructura de la información de un usuario.
@@ -52,6 +57,7 @@ export interface UserMe {
     createdAt: string;
   };
   oauth: Oauth[];
+  security: UserSecurity;
 }
 
 /**

@@ -17,6 +17,16 @@ import AuthNavbar from "@/components/layout/AuthNavbar";
 import { toast } from "react-toastify";
 import { useAppTranslations } from "@/hooks/useAppTranslations";
 import { API_URL } from "@/common/constants/api.constant";
+import { login, verify2FA } from "@/services/auth/auth-post.service";
+import { ApiError } from "@/interfaces/api.interface";
+import {
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalFooter,
+  ModalHeader,
+} from "@/components/ui/modal";
+import VerificationCodeForm from "@/components/sections/verify-code";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,6 +35,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [modal, setModal] = useState<boolean>(false);
+  const [userId, setUserId] = useState<number | null>(null); //luego cambiar por un token temporal
   const { t_auth } = useAppTranslations();
 
   async function handleCredentialsLogin(
@@ -38,9 +50,42 @@ export default function LoginPage() {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
+    let loginResult: null | Awaited<ReturnType<typeof login>> = null;
+    try {
+      loginResult = await login({ email, password });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (
+          error.code === "USER_NOT_FOUND" ||
+          error.code === "INVALID_PASSWORD"
+        ) {
+          const TOAST_ID = "INVALID_CREDENTIALS";
+          if (toast.isActive(TOAST_ID)) {
+            toast.update(TOAST_ID, {
+              render: t_auth("INVALID_CREDENTIALS"),
+              autoClose: 3000,
+            });
+          } else {
+            toast.error(t_auth("INVALID_CREDENTIALS"), {
+              position: "top-center",
+              toastId: "INVALID_CREDENTIALS",
+              autoClose: 3000,
+            });
+          }
+        }
+      }
+      setLoading(null);
+    }
+
+    if (!loginResult?.data && loginResult?.meta?.twoFactorRequired) {
+      setUserId(Number(loginResult?.meta?.sub));
+      setModal(true);
+      setLoading(null);
+      return;
+    }
+
     const result = await signIn("credentials", {
-      email,
-      password,
+      token: loginResult?.data?.refreshToken,
       redirect: false,
     });
 
@@ -65,6 +110,7 @@ export default function LoginPage() {
       }
       setLoading(null);
     } else {
+      setLoading(null);
       toast.success("Bienvenido");
       router.push(callbackUrl);
     }
@@ -73,6 +119,50 @@ export default function LoginPage() {
   const handleOAuthLogin = (provider: string) => {
     setLoading(provider);
     window.location.href = `${API_URL}/auth/${provider}`;
+  };
+
+  const handleVerify = async (code: string) => {
+    let data: null | Awaited<ReturnType<typeof verify2FA>> = null;
+    try {
+      data = await verify2FA({ code, userId: userId as number });
+      console.log(data);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        alert(error.code);
+        return;
+      }
+    }
+
+    const result = await signIn("credentials", {
+      token: data?.data?.refreshToken,
+      redirect: false,
+    });
+
+    if (result?.error) {
+      const TOAST_ID = "INVALID_CREDENTIALS";
+      if (toast.isActive(TOAST_ID)) {
+        toast.update(TOAST_ID, {
+          render: t_auth("INVALID_CREDENTIALS"),
+          autoClose: 3000,
+        });
+      } else {
+        toast.error(
+          result.error === "CredentialsSignin"
+            ? t_auth("INVALID_CREDENTIALS")
+            : result.error,
+          {
+            position: "top-center",
+            toastId: "INVALID_CREDENTIALS",
+            autoClose: 3000,
+          },
+        );
+      }
+      setLoading(null);
+    } else {
+      setLoading(null);
+      toast.success("Bienvenido");
+      router.push(callbackUrl);
+    }
   };
 
   return (
@@ -224,6 +314,27 @@ export default function LoginPage() {
             with bank-level security.
           </p>
         </div>
+        <Modal
+          isOpen={modal}
+          onClose={() => {
+            setModal(false);
+          }}
+          size="xl"
+          position="center"
+          backdropClass="backdrop-blur-md"
+          isDismissable={false}
+        >
+          <ModalHeader>
+            {/* <ModalTitle></ModalTitle> */}
+            <ModalCloseButton />
+          </ModalHeader>
+
+          <ModalBody className="overflow-y-auto max-h-96">
+            <VerificationCodeForm onSubmit={handleVerify} />
+          </ModalBody>
+
+          <ModalFooter>Footer</ModalFooter>
+        </Modal>
       </div>
     </>
   );

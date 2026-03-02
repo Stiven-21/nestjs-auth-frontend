@@ -14,6 +14,7 @@ async function RAT(token: string) {
 
     const { data: userShow } = await me(refreshToken.access_token as string);
     if (!userShow) return null;
+    console.log(userShow);
 
     const user = {
       name: userShow.name + " " + userShow.lastname,
@@ -38,8 +39,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Credentials({
       name: "Backend",
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
         token: { label: "Token", type: "text" },
       },
       authorize: async (credentials) => {
@@ -47,57 +46,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           await deleteCookie("refresh_token");
           return RAT(credentials.token as string);
         }
-        if (!credentials?.email || !credentials?.password) return null;
-
-        try {
-          const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/auth/sign-in`,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                email: credentials.email,
-                password: credentials.password,
-              }),
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-          const data = await res.json();
-
-          if (data.statusCode) {
-            return null;
-          }
-
-          if (data.error) {
-            return null;
-          }
-
-          if (res.ok && data) {
-            const userShow = data.data;
-            const user = {
-              name: userShow.user,
-              email: userShow.email,
-              role: userShow.role,
-              permissions: userShow.permissions,
-            };
-
-            return {
-              ...user,
-              accessToken: userShow.accessToken,
-              refreshToken: userShow.refreshToken,
-            };
-          }
-          return null;
-        } catch (error) {
-          console.error("authorize error:", error);
-          return null;
-        }
+        return null;
       },
     }),
   ],
 
   session: {
     strategy: "jwt",
-    maxAge: 2 * 24 * 60 * 60, // 2 días (alineado con refreshToken)
+    maxAge: 2 * 24 * 60 * 60,
   },
 
   pages: {
@@ -128,9 +84,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
       }
 
-      // El accessToken expiró → refrescar
       if (token.refreshToken) {
         const refreshed = await RAT(token.refreshToken as string);
+
+        if (!refreshed) {
+          token.error = "RefreshTokenExpired";
+        }
 
         if (refreshed) {
           token.accessToken = refreshed.accessToken;
@@ -140,8 +99,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return token;
         }
       }
-
-      // token.error = "RATError";
       return token;
     },
 
@@ -152,6 +109,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.accessToken = token.accessToken as string;
       session.refreshToken = token.refreshToken as string;
       session.error = token.error as string | undefined;
+
+      if (session.error) {
+        await signOut();
+      }
+
       return session;
     },
 

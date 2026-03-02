@@ -5,13 +5,56 @@ import { clearAllCookies } from "@/action/cookie";
 import { me, Oauth, UserMe } from "@/services/user/user-get.service";
 import { ApiError } from "@/interfaces/api.interface";
 import { API_URL } from "@/common/constants/api.constant";
-import { logout, unLinkProvider } from "@/services/auth/auth-post.service";
+import {
+  confirm2FA,
+  disable2FA,
+  enable2FA,
+  logout,
+  reAuth,
+  unLinkProvider,
+} from "@/services/auth/auth-post.service";
+import { find2FATypes } from "@/services/app/app-get.service";
+import {
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from "@/components/ui/modal";
+import ReAuthForm from "@/components/sections/re.auth";
+import VerificationCodeForm from "@/components/sections/verify-code";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const [dataImage, setDataImage] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserMe | null>(null);
+  const [option2FATypes, setOption2FATypes] = useState<string[]>([]);
+  const [selected2FAType, setSelected2FAType] = useState<
+    "totp" | "email" | "sms" | "fido2" | null
+  >("totp");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tokenReAuth, setTokenReAuth] = useState<{
+    token: string;
+    expired: Date;
+  } | null>(null);
+  const [modal, setModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchOption2FATypes = async () => {
+      try {
+        const { data: options } = await find2FATypes();
+        if (!options) return;
+        setOption2FATypes(options);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          setError(error.message);
+        }
+      }
+    };
+    fetchOption2FATypes();
+  }, []);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -36,7 +79,6 @@ export default function DashboardPage() {
     // Redirección directa al endpoint de vinculación del backend
     // Se suele enviar el token de sesión actual en la URL o header para saber a qué usuario vincular
     window.location.href = `${API_URL}/auth/link/${provider}?token=${session.accessToken}`;
-    // window.location.href = `${API_URL}/auth/link/${provider}`;
   };
 
   const handleLogout = async () => {
@@ -53,6 +95,76 @@ export default function DashboardPage() {
       setUserData(data.data);
     } catch (error) {
       if (error instanceof ApiError) {
+        setError(error.message);
+      }
+    }
+  };
+
+  const handleDisable2FA = async () => {
+    setDataImage(null);
+    if (!tokenReAuth) setModal(true);
+    try {
+      if (!session?.accessToken) return;
+      await disable2FA(session?.accessToken as string);
+      const data = await me(session.accessToken);
+      setUserData(data.data);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message);
+      }
+    }
+    if (modal) setModal(false);
+  };
+
+  const handleEnable2FA = async (reauth?: string) => {
+    if (!selected2FAType) return;
+    setModal(true);
+
+    try {
+      const res = await enable2FA(
+        { twoFactorType: selected2FAType },
+        session?.accessToken as string,
+        reauth || (tokenReAuth?.token as string),
+      );
+      setDataImage(res.meta?.dataImage as string);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.code === "INVALID_REAUTH_TOKEN") {
+          console.log(error);
+          setTokenReAuth(null);
+          setModal(true);
+        }
+      }
+    }
+  };
+
+  const handleReAuth = async (password: string) => {
+    if (!selected2FAType) return;
+    try {
+      const res = await reAuth({ password }, session?.accessToken as string);
+      setTokenReAuth({
+        token: res.data as string,
+        expired: new Date(res.meta?.reAuthTokenExpiresIn as string),
+      });
+      await handleEnable2FA(res.data as string);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setError(error.message);
+      }
+    }
+  };
+
+  const handleVerify = async (code: string) => {
+    if (!session?.accessToken) return;
+    try {
+      await confirm2FA({ code }, session?.accessToken as string);
+      const data = await me(session.accessToken);
+      setUserData(data.data);
+      setModal(false);
+      setDataImage(null);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        console.log(error);
         setError(error.message);
       }
     }
@@ -89,7 +201,7 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* User Info Card */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-2">
             <section className="bg-white dark:bg-zinc-900 p-8 shadow-xl rounded-2xl border border-gray-200 dark:border-zinc-800">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                 <span className="w-2 h-6 bg-blue-600 rounded-full"></span>
@@ -126,8 +238,62 @@ export default function DashboardPage() {
                       {userData?.role.name || "N/A"}
                     </p>
                   </div>
+
+                  <div>
+                    <label className="text-xs uppercase font-bold text-gray-400 dark:text-zinc-500">
+                      2FA
+                    </label>
+                  </div>
                 </div>
               )}
+            </section>
+            <section className="bg-white dark:bg-zinc-900 p-8 shadow-xl rounded-2xl border border-gray-200 dark:border-zinc-800">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                <span className="w-1 h-6 bg-green-600 rounded-full"></span>
+                2FA
+              </h2>
+
+              <div className="flex justify-between">
+                <span>
+                  <select
+                    name=""
+                    id=""
+                    className="bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 text-white px-6 py-2.5 rounded-xl font-bold hover:scale-105 transition-transform active:scale-95"
+                    defaultValue={userData?.security.twoFactorType}
+                    onChange={(e) => {
+                      setSelected2FAType(
+                        e.target.value as "totp" | "email" | "sms" | "fido2",
+                      );
+                    }}
+                  >
+                    {option2FATypes.map((option) => (
+                      <option
+                        key={option}
+                        value={option}
+                      >
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+                <span>
+                  {userData?.security.twoFactorEnabled ? (
+                    <button
+                      onClick={() => handleDisable2FA()}
+                      className="bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 text-white px-6 py-2.5 rounded-xl font-bold hover:scale-105 transition-transform active:scale-95"
+                    >
+                      Desactivar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleEnable2FA()}
+                      className="bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 text-white px-6 py-2.5 rounded-xl font-bold hover:scale-105 transition-transform active:scale-95"
+                    >
+                      Activar
+                    </button>
+                  )}
+                </span>
+              </div>
             </section>
           </div>
 
@@ -187,6 +353,36 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={modal}
+        onClose={() => {
+          setModal(false);
+        }}
+        size="xl"
+        position="center"
+        backdropClass="backdrop-blur-md"
+        isDismissable={false}
+      >
+        <ModalHeader>
+          <ModalTitle>{JSON.stringify(tokenReAuth)}</ModalTitle>
+          <ModalCloseButton />
+        </ModalHeader>
+
+        <ModalBody className="overflow-y-auto max-h-96">
+          {tokenReAuth && tokenReAuth.expired > new Date() ? (
+            <VerificationCodeForm
+              onSubmit={handleVerify}
+              qrImageUrl={dataImage!}
+            />
+          ) : (
+            <ReAuthForm onSubmit={handleReAuth} />
+          )}
+        </ModalBody>
+
+        <ModalFooter>Footer</ModalFooter>
+      </Modal>
     </div>
   );
 }
