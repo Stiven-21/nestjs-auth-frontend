@@ -5,12 +5,13 @@ import { motion } from "framer-motion";
 
 type Props = {
   onSubmit: (password: string) => Promise<void>;
+  err?: string | null;
 };
 
-const ReAuthForm = ({ onSubmit }: Props) => {
+const ReAuthForm = ({ onSubmit, err = null }: Props) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(err);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

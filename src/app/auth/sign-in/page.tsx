@@ -36,7 +36,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [modal, setModal] = useState<boolean>(false);
-  const [userId, setUserId] = useState<number | null>(null); //luego cambiar por un token temporal
+  const [tempToken, setTempToken] = useState<string | null>(null);
   const { t_auth } = useAppTranslations();
 
   async function handleCredentialsLogin(
@@ -78,7 +78,7 @@ export default function LoginPage() {
     }
 
     if (!loginResult?.data && loginResult?.meta?.twoFactorRequired) {
-      setUserId(Number(loginResult?.meta?.sub));
+      setTempToken(loginResult?.meta?.tempToken as string);
       setModal(true);
       setLoading(null);
       return;
@@ -124,7 +124,7 @@ export default function LoginPage() {
   const handleVerify = async (code: string) => {
     let data: null | Awaited<ReturnType<typeof verify2FA>> = null;
     try {
-      data = await verify2FA({ code, userId: userId as number });
+      data = await verify2FA({ code, tempToken: tempToken as string });
       console.log(data);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -242,7 +242,7 @@ export default function LoginPage() {
 
                 <div className="flex items-center justify-end mb-2">
                   <Link
-                    href="/forgot-password"
+                    href="/auth/forgot-password"
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline focus:outline-none focus:text-blue-700 dark:focus:text-blue-500 transition-colors"
                   >
                     Forgot password?

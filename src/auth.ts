@@ -14,7 +14,6 @@ async function RAT(token: string) {
 
     const { data: userShow } = await me(refreshToken.access_token as string);
     if (!userShow) return null;
-    console.log(userShow);
 
     const user = {
       name: userShow.name + " " + userShow.lastname,
@@ -76,9 +75,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const decoded: DecodedToken = jwtDecode(token.accessToken as string);
           const now = Math.floor(Date.now() / 1000);
 
-          if (decoded.exp > now) {
-            return token;
-          }
+          if (decoded.exp > now) return token;
         } catch (error) {
           console.error("jwt error:", error);
         }
@@ -87,11 +84,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (token.refreshToken) {
         const refreshed = await RAT(token.refreshToken as string);
 
-        if (!refreshed) {
-          token.error = "RefreshTokenExpired";
-        }
+        if (!refreshed) token.error = "RefreshTokenExpired";
 
         if (refreshed) {
+          // token.id = refreshed.id;
           token.accessToken = refreshed.accessToken;
           token.refreshToken = refreshed.refreshToken;
           token.role = refreshed.role;
@@ -124,7 +120,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const isPublicRoute =
         nextUrl.pathname.startsWith("/auth/sign-in") ||
         nextUrl.pathname.startsWith("/auth/sign-up") ||
-        nextUrl.pathname.startsWith("/auth/callback");
+        nextUrl.pathname.startsWith("/auth/callback") ||
+        nextUrl.pathname.startsWith("/auth/forgot-password");
 
       if (isLoggedIn && isPublicRoute) {
         return Response.redirect(new URL("/dashboard", nextUrl));

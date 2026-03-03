@@ -191,9 +191,9 @@ export async function disable2FA(
 
 export async function verify2FA(data: {
   code: string;
-  userId: number; // luego se cambia por token temporal
+  tempToken: string; // luego se cambia por token temporal
 }): Promise<SuccessResponse<ResponseLogin>> {
-  return await apiRequest<ResponseLogin, { code: string; userId: number }>(
+  return await apiRequest<ResponseLogin, { code: string; tempToken: string }>(
     "/auth/2fa/verify",
     "POST",
     data,

@@ -1,6 +1,7 @@
 "use client";
+
 import { signOut, useSession } from "next-auth/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { clearAllCookies } from "@/action/cookie";
 import { me, Oauth, UserMe } from "@/services/user/user-get.service";
 import { ApiError } from "@/interfaces/api.interface";
@@ -25,159 +26,187 @@ import {
 import ReAuthForm from "@/components/sections/re.auth";
 import VerificationCodeForm from "@/components/sections/verify-code";
 
+type TwoFactorType = "totp" | "email" | "sms" | "fido2";
+
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const [dataImage, setDataImage] = useState<string | null>(null);
+  const accessToken = session?.accessToken;
+
+  /* ---------------- STATE ---------------- */
+
   const [userData, setUserData] = useState<UserMe | null>(null);
-  const [option2FATypes, setOption2FATypes] = useState<string[]>([]);
-  const [selected2FAType, setSelected2FAType] = useState<
-    "totp" | "email" | "sms" | "fido2" | null
-  >("totp");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tokenReAuth, setTokenReAuth] = useState<{
+  const [twoFactorOptions, setTwoFactorOptions] = useState<string[]>([]);
+  const [selected2FAType, setSelected2FAType] =
+    useState<TwoFactorType>("email");
+
+  const [qrImage, setQrImage] = useState<string | null>(null);
+  const [reauthToken, setReauthToken] = useState<{
     token: string;
     expired: Date;
   } | null>(null);
-  const [modal, setModal] = useState<boolean>(false);
 
-  useEffect(() => {
-    const fetchOption2FATypes = async () => {
-      try {
-        const { data: options } = await find2FATypes();
-        if (!options) return;
-        setOption2FATypes(options);
-      } catch (error) {
-        if (error instanceof ApiError) {
-          setError(error.message);
-        }
-      }
-    };
-    fetchOption2FATypes();
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /* ---------------- DERIVED STATE ---------------- */
+
+  const isReauthValid = useMemo(() => {
+    return reauthToken && reauthToken.expired > new Date();
+  }, [reauthToken]);
+
+  /* ---------------- FETCHERS ---------------- */
+
+  const fetchUser = useCallback(async () => {
+    if (!accessToken) return;
+
+    try {
+      const res = await me(accessToken);
+      setUserData(res.data);
+    } catch (err) {
+      handleApiError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken]);
+
+  const fetch2FAOptions = useCallback(async () => {
+    try {
+      const { data } = await find2FATypes();
+      if (data) setTwoFactorOptions(data);
+    } catch (err) {
+      handleApiError(err);
+    }
   }, []);
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      setError(null);
-      try {
-        const data = await me(session?.accessToken as string);
-        setUserData(data.data);
-        setLoading(false);
-      } catch (error) {
-        if (error instanceof ApiError) {
-          setError(error.message);
-        }
-      }
-    };
+    fetch2FAOptions();
+  }, [fetch2FAOptions]);
 
-    if (!session?.accessToken) return;
-    fetchUserData();
-  }, [session?.accessToken]);
+  useEffect(() => {
+    fetchUser();
+  }, [fetchUser]);
 
-  const handleLink = async (provider: string) => {
-    if (!session?.accessToken) return;
-    // Redirección directa al endpoint de vinculación del backend
-    // Se suele enviar el token de sesión actual en la URL o header para saber a qué usuario vincular
-    window.location.href = `${API_URL}/auth/link/${provider}?token=${session.accessToken}`;
+  /* ---------------- ERROR HANDLER ---------------- */
+
+  const handleApiError = (err: unknown) => {
+    if (err instanceof ApiError) {
+      setError(err.message);
+    } else {
+      setError("Unexpected error");
+    }
   };
 
+  const resetError = () => setError(null);
+
+  /* ---------------- AUTH ACTIONS ---------------- */
+
   const handleLogout = async () => {
-    await logout(session?.accessToken as string);
+    if (!accessToken) return;
+    await logout(accessToken);
     clearAllCookies();
     signOut({ callbackUrl: "/" });
   };
 
+  const handleLink = (provider: string) => {
+    if (!accessToken) return;
+    window.location.href = `${API_URL}/auth/link/${provider}?token=${accessToken}`;
+  };
+
   const handleUnlink = async (provider: string) => {
-    if (!session?.accessToken) return;
+    if (!accessToken) return;
+
     try {
-      await unLinkProvider(provider, session.accessToken);
-      const data = await me(session.accessToken);
-      setUserData(data.data);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setError(error.message);
+      await unLinkProvider(provider, accessToken);
+      await fetchUser();
+    } catch (err) {
+      handleApiError(err);
+    }
+  };
+
+  /* ---------------- 2FA FLOW ---------------- */
+
+  const handleEnable2FA = async (reauthOverride?: string) => {
+    if (!accessToken || !selected2FAType) return;
+
+    try {
+      resetError();
+      setModalOpen(true);
+
+      const res = await enable2FA(
+        { twoFactorType: selected2FAType },
+        accessToken,
+        reauthOverride || (reauthToken?.token as string),
+      );
+
+      setQrImage((res.meta?.dataImage as string) || null);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "INVALID_REAUTH_TOKEN") {
+        setReauthToken(null);
+      } else {
+        handleApiError(err);
       }
     }
   };
 
   const handleDisable2FA = async () => {
-    setDataImage(null);
-    if (!tokenReAuth) setModal(true);
-    try {
-      if (!session?.accessToken) return;
-      await disable2FA(session?.accessToken as string);
-      const data = await me(session.accessToken);
-      setUserData(data.data);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setError(error.message);
-      }
-    }
-    if (modal) setModal(false);
-  };
-
-  const handleEnable2FA = async (reauth?: string) => {
-    if (!selected2FAType) return;
-    setModal(true);
+    if (!accessToken) return;
 
     try {
-      const res = await enable2FA(
-        { twoFactorType: selected2FAType },
-        session?.accessToken as string,
-        reauth || (tokenReAuth?.token as string),
-      );
-      setDataImage(res.meta?.dataImage as string);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.code === "INVALID_REAUTH_TOKEN") {
-          console.log(error);
-          setTokenReAuth(null);
-          setModal(true);
-        }
-      }
+      await disable2FA(accessToken);
+      await fetchUser();
+    } catch (err) {
+      handleApiError(err);
     }
   };
 
   const handleReAuth = async (password: string) => {
-    if (!selected2FAType) return;
+    if (!accessToken) return;
+
     try {
-      const res = await reAuth({ password }, session?.accessToken as string);
-      setTokenReAuth({
-        token: res.data as string,
-        expired: new Date(res.meta?.reAuthTokenExpiresIn as string),
-      });
-      await handleEnable2FA(res.data as string);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setError(error.message);
-      }
+      resetError();
+
+      const res = await reAuth({ password }, accessToken);
+
+      const token = res.data as string;
+      const expires = new Date(res.meta?.reAuthTokenExpiresIn as string);
+
+      setReauthToken({ token, expired: expires });
+
+      // Activa inmediatamente después de reauth
+      await handleEnable2FA(token);
+    } catch (err) {
+      handleApiError(err);
     }
   };
 
-  const handleVerify = async (code: string) => {
-    if (!session?.accessToken) return;
+  const handleVerifyCode = async (code: string) => {
+    if (!accessToken) return;
+
     try {
-      await confirm2FA({ code }, session?.accessToken as string);
-      const data = await me(session.accessToken);
-      setUserData(data.data);
-      setModal(false);
-      setDataImage(null);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        console.log(error);
-        setError(error.message);
-      }
+      await confirm2FA({ code }, accessToken);
+
+      await fetchUser();
+
+      setModalOpen(false);
+      setQrImage(null);
+      setReauthToken(null);
+    } catch (err) {
+      handleApiError(err);
     }
   };
 
-  if (loading)
+  /* ---------------- LOADING ---------------- */
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-zinc-950">
-        <div className="animate-pulse text-xl font-medium text-gray-600 dark:text-zinc-400">
-          Cargando dashboard...
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        Cargando dashboard...
       </div>
     );
+  }
+
+  /* ---------------- RENDER ---------------- */
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 py-12 px-4 sm:px-6 lg:px-8">
@@ -256,17 +285,13 @@ export default function DashboardPage() {
               <div className="flex justify-between">
                 <span>
                   <select
-                    name=""
-                    id=""
+                    value={selected2FAType}
                     className="bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 text-white px-6 py-2.5 rounded-xl font-bold hover:scale-105 transition-transform active:scale-95"
-                    defaultValue={userData?.security.twoFactorType}
-                    onChange={(e) => {
-                      setSelected2FAType(
-                        e.target.value as "totp" | "email" | "sms" | "fido2",
-                      );
-                    }}
+                    onChange={(e) =>
+                      setSelected2FAType(e.target.value as TwoFactorType)
+                    }
                   >
-                    {option2FATypes.map((option) => (
+                    {twoFactorOptions.map((option) => (
                       <option
                         key={option}
                         value={option}
@@ -356,9 +381,9 @@ export default function DashboardPage() {
 
       {/* Modal */}
       <Modal
-        isOpen={modal}
+        isOpen={modalOpen}
         onClose={() => {
-          setModal(false);
+          setModalOpen(false);
         }}
         size="xl"
         position="center"
@@ -366,18 +391,22 @@ export default function DashboardPage() {
         isDismissable={false}
       >
         <ModalHeader>
-          <ModalTitle>{JSON.stringify(tokenReAuth)}</ModalTitle>
+          <ModalTitle>Autenticación requerida</ModalTitle>
           <ModalCloseButton />
         </ModalHeader>
 
-        <ModalBody className="overflow-y-auto max-h-96">
-          {tokenReAuth && tokenReAuth.expired > new Date() ? (
+        <ModalBody>
+          {isReauthValid ? (
             <VerificationCodeForm
-              onSubmit={handleVerify}
-              qrImageUrl={dataImage!}
+              onSubmit={handleVerifyCode}
+              qrImageUrl={qrImage ?? undefined}
+              err={error}
             />
           ) : (
-            <ReAuthForm onSubmit={handleReAuth} />
+            <ReAuthForm
+              onSubmit={handleReAuth}
+              err={error}
+            />
           )}
         </ModalBody>
 

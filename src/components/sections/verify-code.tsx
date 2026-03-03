@@ -7,12 +7,17 @@ import Image from "next/image";
 type Props = {
   onSubmit: (code: string) => Promise<void>;
   qrImageUrl?: string; // opcional (base64 o URL)
+  err?: string | null;
 };
 
-export default function VerificationCodeForm({ onSubmit, qrImageUrl }: Props) {
+export default function VerificationCodeForm({
+  onSubmit,
+  qrImageUrl,
+  err = null,
+}: Props) {
   const [code, setCode] = useState<string[]>(Array(6).fill(""));
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(err);
 
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
