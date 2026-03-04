@@ -242,7 +242,7 @@ export default function LoginPage() {
 
                 <div className="flex items-center justify-end mb-2">
                   <Link
-                    href="/auth/forgot-password"
+                    href="/auth/reset-password"
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline focus:outline-none focus:text-blue-700 dark:focus:text-blue-500 transition-colors"
                   >
                     Forgot password?

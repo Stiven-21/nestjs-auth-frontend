@@ -1,6 +1,8 @@
 {
     "auth": {
-        "INVALID_CREDENTIALS":"Correo o contraseña incorrectos."
+        "INVALID_CREDENTIALS":"Correo o contraseña incorrectos.",
+        "SUCCESS_PASSWORD_RESET": "Contraseña restablecida con éxito.",
+        "USER_NOT_FOUND": "El usuario no se encuentra registrado."
     },
     "language": {
         "SPANISH": "Español",

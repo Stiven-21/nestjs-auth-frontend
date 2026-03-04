@@ -1,6 +1,8 @@
 {
     "auth": {
-        "INVALID_CREDENTIALS": "Invalid email or password."
+        "INVALID_CREDENTIALS": "Invalid email or password.",
+        "SUCCESS_PASSWORD_RESET": "Password reset successfully.",
+        "USER_NOT_FOUND": "User not found."
     },
     "language": {
         "SPANISH": "Spanish",

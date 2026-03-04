@@ -199,3 +199,33 @@ export async function verify2FA(data: {
     data,
   );
 }
+
+/**
+ * Restablece la contraseña de un usuario.
+ * @param {string} email - El correo electrónica del usuario.
+ * @returns {Promise<SuccessResponse<null>>} Una promesa que resuelve con la respuesta del servidor.
+ * @throws {ApiError} Si ocurre un error en la solicitud.
+ */
+export async function resetPassword(data: {
+  email: string;
+}): Promise<SuccessResponse<null>> {
+  return await apiRequest<null, { email: string }>(
+    "/auth/reset-password",
+    "POST",
+    data,
+  );
+}
+
+export async function resetPasswordToken(
+  token: string,
+  data: {
+    password: string;
+    password_confirm: string;
+  },
+): Promise<SuccessResponse<null>> {
+  return await apiRequest<null, { password: string; password_confirm: string }>(
+    `/auth/reset-password/${token}`,
+    "POST",
+    data,
+  );
+}

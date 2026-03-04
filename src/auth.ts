@@ -116,12 +116,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     authorized({ auth, request: { nextUrl } }) {
       if (nextUrl.pathname === "/") return true;
       if (nextUrl.pathname.startsWith("/auth/verify-email/")) return true;
+      if (nextUrl.pathname.startsWith("/auth/reset-password/")) return true;
       const isLoggedIn = !!auth?.user;
       const isPublicRoute =
         nextUrl.pathname.startsWith("/auth/sign-in") ||
         nextUrl.pathname.startsWith("/auth/sign-up") ||
         nextUrl.pathname.startsWith("/auth/callback") ||
-        nextUrl.pathname.startsWith("/auth/forgot-password");
+        nextUrl.pathname.startsWith("/auth/reset-password");
 
       if (isLoggedIn && isPublicRoute) {
         return Response.redirect(new URL("/dashboard", nextUrl));

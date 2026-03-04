@@ -47,7 +47,13 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    message?: string | null;
+    user?: string | null;
+    reauth?: string | null;
+    code2fa?: string | null;
+    oauth?: string | null;
+  } | null>(null);
 
   /* ---------------- DERIVED STATE ---------------- */
 
@@ -63,8 +69,11 @@ export default function DashboardPage() {
     try {
       const res = await me(accessToken);
       setUserData(res.data);
+      setSelected2FAType(
+        (res.data?.security.twoFactorType as TwoFactorType) || "email",
+      );
     } catch (err) {
-      handleApiError(err);
+      handleApiError(err, "user");
     } finally {
       setLoading(false);
     }
@@ -75,7 +84,7 @@ export default function DashboardPage() {
       const { data } = await find2FATypes();
       if (data) setTwoFactorOptions(data);
     } catch (err) {
-      handleApiError(err);
+      handleApiError(err, "code2fa");
     }
   }, []);
 
@@ -89,11 +98,11 @@ export default function DashboardPage() {
 
   /* ---------------- ERROR HANDLER ---------------- */
 
-  const handleApiError = (err: unknown) => {
+  const handleApiError = (err: unknown, key?: string) => {
     if (err instanceof ApiError) {
-      setError(err.message);
+      setError({ [key || "user"]: err.message });
     } else {
-      setError("Unexpected error");
+      setError({ ["message"]: "Ha ocurrido un error" });
     }
   };
 
@@ -120,7 +129,7 @@ export default function DashboardPage() {
       await unLinkProvider(provider, accessToken);
       await fetchUser();
     } catch (err) {
-      handleApiError(err);
+      handleApiError(err, "oauth");
     }
   };
 
@@ -144,7 +153,7 @@ export default function DashboardPage() {
       if (err instanceof ApiError && err.code === "INVALID_REAUTH_TOKEN") {
         setReauthToken(null);
       } else {
-        handleApiError(err);
+        handleApiError(err, "code2fa");
       }
     }
   };
@@ -156,7 +165,7 @@ export default function DashboardPage() {
       await disable2FA(accessToken);
       await fetchUser();
     } catch (err) {
-      handleApiError(err);
+      handleApiError(err, "code2fa");
     }
   };
 
@@ -176,7 +185,7 @@ export default function DashboardPage() {
       // Activa inmediatamente después de reauth
       await handleEnable2FA(token);
     } catch (err) {
-      handleApiError(err);
+      handleApiError(err, "reauth");
     }
   };
 
@@ -192,7 +201,7 @@ export default function DashboardPage() {
       setQrImage(null);
       setReauthToken(null);
     } catch (err) {
-      handleApiError(err);
+      handleApiError(err, "code2fa");
     }
   };
 
@@ -237,9 +246,9 @@ export default function DashboardPage() {
                 Perfil
               </h2>
 
-              {error ? (
+              {error?.message || error?.user ? (
                 <div className="p-4 bg-red-50 text-red-600 rounded-lg text-sm">
-                  {error}
+                  {error.message || error.user}
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -400,12 +409,12 @@ export default function DashboardPage() {
             <VerificationCodeForm
               onSubmit={handleVerifyCode}
               qrImageUrl={qrImage ?? undefined}
-              err={error}
+              err={error?.code2fa}
             />
           ) : (
             <ReAuthForm
               onSubmit={handleReAuth}
-              err={error}
+              err={error?.reauth}
             />
           )}
         </ModalBody>
